@@ -154,3 +154,17 @@ then that many 32-bit dimensions (including 84 input and 1 output), then each
 layer's float32 weights/bias in PyTorch order. Hidden activations are ReLU and
 the output is tanh. Rust validates dimensions, exact weight count and finite
 weights. Legacy `C4V1` files and original Python checkpoints remain supported.
+
+## Browser playground
+
+The TypeScript website in [`web/`](web/README.md) reuses the Rust engine through
+WebAssembly. It includes animated play, configurable controllers on both sides,
+manual AI-versus-AI stepping, and per-column AI statistics.
+
+```sh
+nix develop
+cd web
+npm ci
+npm run engine
+npm run dev
+```

@@ -10,3 +10,6 @@ rand = "0.8.5"
 
 [lib]
 crate-type = ["rlib", "cdylib"]
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.2.12", features = ["custom"] }

@@ -1,0 +1,26 @@
+[
+  {
+    "id": "small-20k",
+    "label": "Small · 20k",
+    "architecture": "128 → 128",
+    "url": "/models/small-20k.bin"
+  },
+  {
+    "id": "large-20k",
+    "label": "Large · 20k",
+    "architecture": "512 → 512 → 256",
+    "url": "/models/large-20k.bin"
+  },
+  {
+    "id": "large-120k",
+    "label": "Large · 120k",
+    "architecture": "512 → 512 → 256",
+    "url": "/models/large-120k.bin"
+  },
+  {
+    "id": "large-1m",
+    "label": "Large · 1m",
+    "architecture": "512 → 512 → 256",
+    "url": "/models/large-1m.bin"
+  }
+]

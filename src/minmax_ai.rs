@@ -12,6 +12,9 @@ pub struct MinMaxAi {
 }
 
 impl MinMaxAi {
+    pub fn column_score(&self, state: State, x: usize) -> isize {
+        self.minmax(state, x, 0, isize::MIN, isize::MAX)
+    }
     pub fn new(player: Player, depth: usize) -> MinMaxAi {
         MinMaxAi { depth, player, count: Cell::new(0) }
     }

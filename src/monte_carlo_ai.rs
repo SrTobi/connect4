@@ -10,6 +10,18 @@ pub struct MonteCarloAi {
     player: Player,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct RolloutStats {
+    pub wins: usize,
+    pub draws: usize,
+    pub losses: usize,
+}
+impl RolloutStats {
+    pub fn score(self) -> isize {
+        self.wins as isize - self.losses as isize
+    }
+}
+
 impl MonteCarloAi {
     pub fn new(player: Player, attempts: usize) -> MonteCarloAi {
         MonteCarloAi { attempts, player }
@@ -17,7 +29,7 @@ impl MonteCarloAi {
 
     // Prefer wins, then moves that do not let the opponent win immediately.
     // If every move loses, keep all legal moves available for simulation.
-    fn tactical_moves(state: State) -> impl Iterator<Item = usize> {
+    pub(crate) fn tactical_moves(state: State) -> impl Iterator<Item = usize> {
         let mut winning_moves = 0u8;
         let mut safe_moves = 0u8;
         for x in state.iter_moves() {
@@ -45,8 +57,15 @@ impl MonteCarloAi {
     }
 
     fn score_with_rng(&self, state: State, rng: &mut impl Rng) -> isize {
-        let mut wins = 0;
-        let mut losses = 0;
+        self.rollout_stats_with_rng(state, rng).score()
+    }
+
+    pub fn rollout_stats(&self, state: State) -> RolloutStats {
+        self.rollout_stats_with_rng(state, &mut thread_rng())
+    }
+
+    fn rollout_stats_with_rng(&self, state: State, rng: &mut impl Rng) -> RolloutStats {
+        let mut result = RolloutStats::default();
 
         for _ in 0..self.attempts {
             let mut state = state;
@@ -56,13 +75,15 @@ impl MonteCarloAi {
             }
             if let Some(win_player) = state.win_player() {
                 if win_player == self.player {
-                    wins += 1;
+                    result.wins += 1;
                 } else {
-                    losses += 1;
+                    result.losses += 1;
                 }
+            } else {
+                result.draws += 1;
             }
         }
-        wins - losses
+        result
     }
 }
 
