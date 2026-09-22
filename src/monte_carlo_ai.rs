@@ -1,4 +1,4 @@
-use rand::{seq::IteratorRandom, thread_rng};
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 
 use crate::{
     state::{Player, State},
@@ -39,15 +39,19 @@ impl MonteCarloAi {
             .filter(move |&x| preferred == 0 || preferred & (1 << x) != 0)
     }
 
+    #[cfg(test)]
     fn score(&self, state: State) -> isize {
+        self.score_with_rng(state, &mut thread_rng())
+    }
+
+    fn score_with_rng(&self, state: State, rng: &mut impl Rng) -> isize {
         let mut wins = 0;
         let mut losses = 0;
-        let mut rng = thread_rng();
 
         for _ in 0..self.attempts {
             let mut state = state;
             while !state.is_full() && state.win_player().is_none() {
-                let x = Self::tactical_moves(state).choose(&mut rng).unwrap();
+                let x = Self::tactical_moves(state).choose(&mut *rng).unwrap();
                 state = state.put(x);
             }
             if let Some(win_player) = state.win_player() {
@@ -62,8 +66,8 @@ impl MonteCarloAi {
     }
 }
 
-impl Ai for MonteCarloAi {
-    fn best_move(&self, state: State) -> usize {
+impl MonteCarloAi {
+    pub fn best_move_with_rng(&self, state: State, rng: &mut impl Rng) -> usize {
         let mut moves = Self::tactical_moves(state).peekable();
         let first = moves.next().expect("no legal moves available");
         if state.put(first).is_win() || moves.peek().is_none() {
@@ -71,8 +75,14 @@ impl Ai for MonteCarloAi {
         }
         std::iter::once(first)
             .chain(moves)
-            .max_by_key(|&x| self.score(state.put(x)))
+            .max_by_key(|&x| self.score_with_rng(state.put(x), rng))
             .unwrap()
+    }
+}
+
+impl Ai for MonteCarloAi {
+    fn best_move(&self, state: State) -> usize {
+        self.best_move_with_rng(state, &mut thread_rng())
     }
 }
 

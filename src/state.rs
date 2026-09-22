@@ -159,6 +159,20 @@ impl State {
         self.player
     }
 
+    /// Two planes, current player first; bottom row first within each plane.
+    pub fn features(&self) -> [f32; 84] {
+        let mut features = [0.0; 84];
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                if let Some(is_a) = self.get(x, y) {
+                    let plane = usize::from(is_a != (self.player == Player::A));
+                    features[plane * FIELD_SIZE + index(x, y)] = 1.0;
+                }
+            }
+        }
+        features
+    }
+
     pub fn win_player(&self) -> Option<Player> {
         self.is_win().then(|| self.player.other())
     }
