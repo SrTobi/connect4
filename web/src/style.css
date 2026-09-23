@@ -915,6 +915,28 @@ footer span:last-child {
     font-size: 11px;
   }
 }
+.history-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.history-button {
+  border: 1px solid #354353;
+  border-radius: 6px;
+  background: transparent;
+  color: #d8e2ed;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.history-button:hover:not(:disabled) {
+  background: #202c3a;
+}
+#history-live {
+  color: var(--mint);
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

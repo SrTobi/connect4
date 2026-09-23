@@ -41,6 +41,10 @@ can also build independently of the parent Rust project.
   each player. Higher budgets take longer. Progress appears while evaluating.
 - Dropping discs and winning lines animate; reduced-motion preferences are
   respected.
+- **Back** and **Forward** browse earlier turns and their saved AI statistics.
+  This is a read-only view: moves and controller changes are disabled while
+  browsing. **Return to live** restores the current position, where play resumes.
+  History is available after a win or draw and clears when starting a new game.
 
 ## Column statistics
 

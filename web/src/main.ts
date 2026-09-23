@@ -14,7 +14,7 @@ app.innerHTML = `
  <header class="header"><a class="brand" href="${assetUrl("")}" aria-label="Four home"><span class="brand-mark"><i></i><i></i><i></i><i></i></span>Four<span class="brand-dot">.</span></a><span class="header-caption">THE AI PLAYGROUND</span><button id="reset" class="quiet-button">↻ <span>New game</span></button></header>
  <main class="layout">
  <aside class="players"><div class="section-label">THE MATCHUP</div><h1>Your move.<br><span>Or theirs.</span></h1><div id="players"></div><div class="match-note"><span class="note-icon">◎</span><p id="mode-note">Connect four in any direction. Pick a column to drop a disc.</p></div></aside>
- <section class="game-section" aria-label="Connect Four game"><div class="game-top"><div id="turn" role="status" aria-live="polite">Loading the engine…</div><span id="move-number" class="mono">MOVE 00</span></div><div class="board-wrap"><div id="column-numbers" class="column-numbers">${Array.from({ length: 7 }, (_, i) => `<span>${i + 1}</span>`).join("")}</div><div id="board" class="board" aria-label="Game board"></div><div id="column-buttons" class="column-buttons">${Array.from({ length: 7 }, (_, i) => `<button data-column="${i}" aria-label="Drop in column ${i + 1}" disabled></button>`).join("")}</div></div><div class="game-bottom"><span id="game-hint">Preparing your opponent</span><button id="next" class="primary-button" hidden>Next move <span>→</span></button></div><div id="error" role="alert" hidden></div><div class="board-legend"><span><i class="a-dot"></i>Player 1</span><span><i class="b-dot"></i>Player 2</span><span class="legend-right">7 columns. 6 rows. 4 to win.</span></div></section>
+ <section class="game-section" aria-label="Connect Four game"><div class="game-top"><div id="turn" role="status" aria-live="polite">Loading the engine…</div><span id="move-number" class="mono">MOVE 00</span></div><div class="board-wrap"><div id="column-numbers" class="column-numbers">${Array.from({ length: 7 }, (_, i) => `<span>${i + 1}</span>`).join("")}</div><div id="board" class="board" aria-label="Game board"></div><div id="column-buttons" class="column-buttons">${Array.from({ length: 7 }, (_, i) => `<button data-column="${i}" aria-label="Drop in column ${i + 1}" disabled></button>`).join("")}</div></div><div class="game-bottom"><span id="game-hint">Preparing your opponent</span><button id="next" class="primary-button" hidden>Next move <span>→</span></button></div><nav class="history-controls" aria-label="Move history"><button id="history-back" class="history-button" aria-label="Previous turn">← Back</button><span id="history-position" class="mono" aria-live="polite">LIVE · 0</span><button id="history-forward" class="history-button" aria-label="Next turn in history">Forward →</button><button id="history-live" class="history-button" hidden>Return to live</button></nav><div id="error" role="alert" hidden></div><div class="board-legend"><span><i class="a-dot"></i>Player 1</span><span><i class="b-dot"></i>Player 2</span><span class="legend-right">7 columns. 6 rows. 4 to win.</span></div></section>
  <aside class="insight"><div class="section-label">BEHIND THE MOVE</div><div class="insight-heading"><h2>What the AI sees</h2><span id="analysis-badge" class="chip">Awaiting move</span></div><div id="analysis-summary" class="analysis-summary">After an AI plays, explore how it rated each column.</div><div id="stats" class="stats"></div><div id="analysis-note" class="analysis-note"></div></aside>
  </main><footer><span>Built to play. Open to explore.</span><span>Rust engine · Learned values &amp; Monte Carlo</span></footer>`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
@@ -34,6 +34,25 @@ let busy = true;
 let animating = false;
 let generation = 0;
 let last: Analysis | undefined;
+// Snapshots are for display only. The worker always keeps the live game.
+let history: { position: Position; last?: Analysis }[] = [{ position }];
+let historyIndex = 0;
+function reviewing() {
+  return historyIndex < history.length - 1;
+}
+function displayed() {
+  return history[historyIndex];
+}
+function viewHistory(index: number) {
+  if (!ready || busy || animating || index < 0 || index >= history.length)
+    return;
+  historyIndex = index;
+  renderPlayers();
+  renderBoard();
+  renderStats();
+  renderStatus();
+  if (!reviewing()) scheduleAI();
+}
 let progress = 0;
 let error = "";
 let ready = false;
@@ -94,16 +113,17 @@ function bothAI() {
   return !human(1) && !human(2);
 }
 function renderPlayers() {
+  const shown = displayed().position;
   $("players").innerHTML = players
     .map(
       (p, i) =>
-        `<section class="player-card side-${i + 1} ${position.turn === i + 1 && !position.result ? "active" : ""}" data-player="${i}"><div class="player-card-head"><span class="player-disc"></span><span>PLAYER ${i + 1}</span><span class="seat">${i === 0 ? "FIRST" : "SECOND"}</span></div><label for="ai-${i}">Controller</label><select id="ai-${i}" aria-label="Player ${i + 1} AI"><option value="human">Human</option>${models.map((m) => `<option value="${m.id}">${m.label}</option>`).join("")}<option value="monte-carlo">Monte Carlo</option><option value="minmax">Minimax</option><option value="random">Random</option></select><div class="controller-description">${p.ai === "human" ? "You call the shots." : p.ai === "monte-carlo" ? "Simulates games before choosing." : p.ai === "minmax" ? "Looks ahead for wins and losses." : p.ai === "random" ? "Every legal column has a chance." : "A value network trained through self-play."}</div>${p.ai === "monte-carlo" ? `<label for="attempts-${i}">Attempts per column</label><input id="attempts-${i}" type="number" min="1" max="20000" step="1" value="${p.attempts}" inputmode="numeric"><span class="input-note">1–20,000 · More attempts take longer</span>` : ""}${p.ai === "minmax" ? `<label for="depth-${i}">Search depth</label><select id="depth-${i}">${[1, 2, 3, 4, 5, 6].map((d) => `<option value="${d}" ${p.depth === d ? "selected" : ""}>${d + 1} moves ahead</option>`).join("")}</select>` : ""}</section>`,
+        `<section class="player-card side-${i + 1} ${shown.turn === i + 1 && !shown.result ? "active" : ""}" data-player="${i}"><div class="player-card-head"><span class="player-disc"></span><span>PLAYER ${i + 1}</span><span class="seat">${i === 0 ? "FIRST" : "SECOND"}</span></div><label for="ai-${i}">Controller</label><select id="ai-${i}" aria-label="Player ${i + 1} AI"><option value="human">Human</option>${models.map((m) => `<option value="${m.id}">${m.label}</option>`).join("")}<option value="monte-carlo">Monte Carlo</option><option value="minmax">Minimax</option><option value="random">Random</option></select><div class="controller-description">${p.ai === "human" ? "You call the shots." : p.ai === "monte-carlo" ? "Simulates games before choosing." : p.ai === "minmax" ? "Looks ahead for wins and losses." : p.ai === "random" ? "Every legal column has a chance." : "A value network trained through self-play."}</div>${p.ai === "monte-carlo" ? `<label for="attempts-${i}">Attempts per column</label><input id="attempts-${i}" type="number" min="1" max="20000" step="1" value="${p.attempts}" inputmode="numeric"><span class="input-note">1–20,000 · More attempts take longer</span>` : ""}${p.ai === "minmax" ? `<label for="depth-${i}">Search depth</label><select id="depth-${i}">${[1, 2, 3, 4, 5, 6].map((d) => `<option value="${d}" ${p.depth === d ? "selected" : ""}>${d + 1} moves ahead</option>`).join("")}</select>` : ""}</section>`,
     )
     .join("");
   players.forEach((p, i) => {
     const select = $<HTMLSelectElement>(`ai-${i}`);
     select.value = p.ai;
-    select.disabled = busy || animating || !ready;
+    select.disabled = busy || animating || !ready || reviewing();
     select.onchange = () => {
       players[i].ai = select.value;
       error = "";
@@ -115,7 +135,7 @@ function renderPlayers() {
       `attempts-${i}`,
     ) as HTMLInputElement | null;
     if (attempts) {
-      attempts.disabled = busy || animating;
+      attempts.disabled = busy || animating || reviewing();
       attempts.oninput = () => {
         const n = Number(attempts.value);
         if (Number.isInteger(n) && n >= 1 && n <= 20000)
@@ -137,12 +157,12 @@ function renderPlayers() {
       `depth-${i}`,
     ) as HTMLSelectElement | null;
     if (depth) {
-      depth.disabled = busy || animating;
+      depth.disabled = busy || animating || reviewing();
       depth.onchange = () => (players[i].depth = Number(depth.value));
     }
   });
 }
-function winningCells(): Set<number> {
+function winningCells(position: Position): Set<number> {
   const found = new Set<number>();
   if (!position.result || position.result === 3) return found;
   for (let y = 0; y < 6; y++)
@@ -172,7 +192,8 @@ function winningCells(): Set<number> {
   return found;
 }
 function renderBoard(drop?: { column: number; row: number }) {
-  const wins = winningCells();
+  const position = displayed().position;
+  const wins = winningCells(position);
   $("board").innerHTML = Array.from({ length: 42 }, (_, n) => {
     const x = n % 7,
       y = 5 - Math.floor(n / 7),
@@ -185,6 +206,7 @@ function renderBoard(drop?: { column: number; row: number }) {
     const x = Number(b.dataset.column);
     b.disabled =
       !ready ||
+      reviewing() ||
       busy ||
       animating ||
       !!position.result ||
@@ -194,10 +216,17 @@ function renderBoard(drop?: { column: number; row: number }) {
   });
 }
 function renderStatus() {
+  const position = displayed().position;
+  const review = reviewing();
   const ended = !!position.result;
   const ai = !human(position.turn);
   let title = "";
   if (!ready) title = "Loading the engine…";
+  else if (review)
+    title =
+      position.ply === 0
+        ? "History · starting position"
+        : `History · after move ${position.ply}`;
   else if (ended)
     title =
       position.result === 3
@@ -213,30 +242,44 @@ function renderStatus() {
     `<span class="turn-disc side-${ended && position.result !== 3 ? position.result : position.turn} ${busy ? "thinking" : ""}"></span><span>${title}</span>`;
   $("move-number").textContent =
     `MOVE ${String(position.ply).padStart(2, "0")}`;
-  $("game-hint").textContent = ended
-    ? "New game, same curiosity."
-    : animating
-      ? ""
-      : busy && ready
-        ? `Evaluating columns · ${Math.round(progress * 100)}%`
-        : bothAI()
-          ? "One click. One decision."
-          : ai
-            ? "Your opponent plays automatically."
-            : "Choose a column above or use keys 1–7.";
+  $("game-hint").textContent = review
+    ? "Viewing history. Return to live to continue playing."
+    : ended
+      ? "New game, same curiosity."
+      : animating
+        ? ""
+        : busy && ready
+          ? `Evaluating columns · ${Math.round(progress * 100)}%`
+          : bothAI()
+            ? "One click. One decision."
+            : ai
+              ? "Your opponent plays automatically."
+              : "Choose a column above or use keys 1–7.";
   const next = $<HTMLButtonElement>("next");
-  next.hidden = ended || !ready || (!bothAI() && !error);
+  next.hidden = review || ended || !ready || (!bothAI() && !error);
   next.disabled = busy || animating || human(position.turn);
   next.innerHTML = `${error ? "Retry AI move" : "Next move"} <span>→</span>`;
-  $("mode-note").textContent = bothAI()
-    ? "AI vs AI. Press Next move to advance one turn and inspect its reasoning."
-    : "Connect four in any direction. Pick a column to drop a disc.";
+  $("mode-note").textContent = review
+    ? "Earlier position · the live game is preserved. Controller settings apply to the live game."
+    : bothAI()
+      ? "AI vs AI. Press Next move to advance one turn and inspect its reasoning."
+      : "Connect four in any direction. Pick a column to drop a disc.";
   $<HTMLButtonElement>("reset").disabled = !ready;
-  $("error").hidden = !error;
+  const historyLocked = !ready || busy || animating;
+  $<HTMLButtonElement>("history-back").disabled =
+    historyLocked || historyIndex === 0;
+  $<HTMLButtonElement>("history-forward").disabled = historyLocked || !review;
+  $<HTMLButtonElement>("history-live").hidden = !review;
+  $<HTMLButtonElement>("history-live").disabled = historyLocked;
+  $("history-position").textContent = review
+    ? `${historyIndex} / ${history.length - 1}`
+    : `LIVE · ${history.length - 1}`;
+  $("error").hidden = !error || review;
   $("error").textContent = error;
   document.querySelectorAll<HTMLButtonElement>("[data-column]").forEach((b) => {
     b.disabled =
       !ready ||
+      reviewing() ||
       busy ||
       animating ||
       ended ||
@@ -245,6 +288,7 @@ function renderStatus() {
   });
 }
 function renderStats() {
+  const last = displayed().last;
   if (!last) {
     $("stats").innerHTML = Array.from(
       { length: 7 },
@@ -300,7 +344,7 @@ function renderStats() {
 }
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function move(type: "human" | "ai", column?: number) {
-  if (!ready || busy || animating || position.result) return;
+  if (!ready || busy || animating || reviewing() || position.result) return;
   const token = generation;
   busy = true;
   progress = 0;
@@ -317,6 +361,8 @@ async function move(type: "human" | "ai", column?: number) {
     if (token !== generation) return;
     position = result.position;
     if (result.analysis) last = result.analysis;
+    history.push({ position, last });
+    historyIndex = history.length - 1;
     busy = false;
     animating = true;
     renderBoard({ column: result.column, row: result.row });
@@ -351,6 +397,7 @@ function scheduleAI() {
     busy ||
     animating ||
     position.result ||
+    reviewing() ||
     bothAI() ||
     human(position.turn) ||
     error
@@ -373,6 +420,8 @@ async function reset() {
     position = await request<Position>("reset");
     if (token !== generation) return;
     last = undefined;
+    history = [{ position }];
+    historyIndex = 0;
     busy = false;
     renderBoard();
     renderPlayers();
@@ -387,6 +436,9 @@ async function reset() {
 }
 $("reset").onclick = () => void reset();
 $("next").onclick = () => void move("ai");
+$("history-back").onclick = () => viewHistory(historyIndex - 1);
+$("history-forward").onclick = () => viewHistory(historyIndex + 1);
+$("history-live").onclick = () => viewHistory(history.length - 1);
 document.addEventListener("keydown", (e) => {
   if (
     e.target instanceof HTMLInputElement ||
@@ -401,6 +453,7 @@ document.addEventListener("keydown", (e) => {
     human(position.turn) &&
     !busy &&
     !animating &&
+    !reviewing() &&
     !position.result
   ) {
     e.preventDefault();
@@ -417,6 +470,8 @@ async function init() {
     if (!response.ok) throw Error("Could not load the available models.");
     models = await response.json();
     position = await request<Position>("init", { models });
+    history = [{ position }];
+    historyIndex = 0;
     ready = true;
     busy = false;
     renderPlayers();
@@ -442,7 +497,15 @@ if (context) {
       "Read the current board, player controllers, and last AI column statistics.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
-    execute: () => ({ position, players, last, busy: busy || animating }),
+    execute: () => ({
+      position,
+      players,
+      last,
+      viewed: displayed(),
+      historyIndex,
+      reviewing: reviewing(),
+      busy: busy || animating,
+    }),
   });
   context.registerTool({
     name: "play_connect_four_column",
@@ -462,6 +525,7 @@ if (context) {
         animating ||
         !ready ||
         position.result ||
+        reviewing() ||
         !human(position.turn) ||
         position.cells[35 + input.column - 1]
       )
@@ -475,7 +539,14 @@ if (context) {
     description: "Play the next AI turn in a match with two AI controllers.",
     inputSchema: { type: "object", properties: {} },
     execute: async () => {
-      if (!bothAI() || busy || animating || !ready || position.result)
+      if (
+        !bothAI() ||
+        busy ||
+        animating ||
+        !ready ||
+        reviewing() ||
+        position.result
+      )
         throw Error("Next AI move is not available.");
       await move("ai");
       return { position, last };
